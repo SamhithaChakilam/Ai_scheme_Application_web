@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Government Scheme Eligibility Finder
 
 A comprehensive full-stack application that helps Indian citizens discover and apply for government welfare schemes they qualify for using AI-powered eligibility matching.
@@ -174,3 +175,6 @@ This is a demo application. For production use, consider:
 ## License
 
 MIT License - See LICENSE file for details
+=======
+# Ai_scheme_Application_portal
+>>>>>>> 19db6d598942e8a809b3a4f1cbebef917d853baa
