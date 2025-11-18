@@ -3,6 +3,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 from functools import wraps
 import jwt
+import os
 
 from digilocker_integration import (
     initiate_digilocker_auth,
@@ -190,7 +191,6 @@ def login():
         'user': user
     }), 200
 
-
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     data = request.get_json() or {}
@@ -224,7 +224,6 @@ def get_all_schemes():
     all_schemes = list(schemes_collection.find({}, {'_id': 0}))
     return jsonify(all_schemes), 200
 
-
 @app.route('/api/schemes/<scheme_id>', methods=['GET'])
 def get_scheme_details(scheme_id):
     scheme = schemes_collection.find_one({'id': scheme_id}, {'_id': 0})
@@ -233,7 +232,6 @@ def get_scheme_details(scheme_id):
         return jsonify({'message': 'Scheme not found'}), 404
 
     return jsonify(scheme), 200
-
 
 @app.route('/api/schemes/eligible', methods=['POST'])
 @token_required
@@ -286,7 +284,6 @@ def get_user_applications(current_user):
 
     apps = list(applications_collection.find({'aadhaar': aadhaar}, {'_id': 0}))
     return jsonify(apps), 200
-
 
 @app.route('/api/applications', methods=['POST'])
 @token_required
@@ -341,13 +338,11 @@ def admin_all_applications(current_user):
     all_apps = list(applications_collection.find({}, {'_id': 0}))
     return jsonify(all_apps), 200
 
-
 @app.route('/api/admin/edit-requests', methods=['GET'])
 @admin_required
 def admin_edit_requests(current_user):
     all_requests = list(edit_requests_collection.find({}, {'_id': 0}))
     return jsonify(all_requests), 200
-
 
 @app.route('/api/admin/schemes', methods=['GET'])
 @admin_required
@@ -358,4 +353,5 @@ def admin_all_schemes(current_user):
 # ---------------- MAIN ---------------- #
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
