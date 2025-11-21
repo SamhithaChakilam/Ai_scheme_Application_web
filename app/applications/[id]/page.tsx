@@ -31,6 +31,7 @@ interface Scheme {
 export default function ApplicationDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const API = process.env.NEXT_PUBLIC_API_URL
   const applicationId = params.id as string
 
   const [application, setApplication] = useState<Application | null>(null)
@@ -43,7 +44,6 @@ export default function ApplicationDetailPage() {
       router.push('/login')
       return
     }
-
     fetchApplicationDetails()
   }, [applicationId, router])
 
@@ -52,7 +52,7 @@ export default function ApplicationDetailPage() {
       const token = localStorage.getItem('token')
 
       // Fetch application
-      const appResponse = await fetch(`http://localhost:5000/api/applications/${applicationId}`, {
+      const appResponse = await fetch(`${API}/api/applications/${applicationId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -61,7 +61,7 @@ export default function ApplicationDetailPage() {
       setApplication(appData)
 
       // Fetch scheme details
-      const schemeResponse = await fetch(`http://localhost:5000/api/schemes/${appData.scheme_id}`)
+      const schemeResponse = await fetch(`${API}/api/schemes/${appData.scheme_id}`)
       const schemeData = await schemeResponse.json()
       setScheme(schemeData)
 
@@ -99,9 +99,11 @@ export default function ApplicationDetailPage() {
         </Link>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
+          
+          {/* MAIN CONTENT */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Application Status */}
+
+            {/* APPLICATION DETAILS */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -111,16 +113,23 @@ export default function ApplicationDetailPage() {
                       Application ID: {application.id}
                     </CardDescription>
                   </div>
+
                   <Badge 
                     variant={application.status === 'approved' ? 'default' : application.status === 'rejected' ? 'destructive' : 'outline'}
-                    className={application.status === 'approved' ? 'bg-success text-success-foreground' : application.status === 'submitted' ? 'bg-warning/10 text-warning border-warning' : ''}
+                    className={
+                      application.status === 'approved' ? 'bg-success text-success-foreground' :
+                      application.status === 'submitted' ? 'bg-warning/10 text-warning border-warning' : ''
+                    }
                   >
                     {application.status.replace('_', ' ').toUpperCase()}
                   </Badge>
                 </div>
               </CardHeader>
+
               <CardContent>
                 <div className="space-y-4">
+                  
+                  {/* Scheme Info */}
                   <div>
                     <h3 className="mb-2 font-semibold">Scheme Information</h3>
                     <div className="rounded-lg bg-muted/50 p-4">
@@ -132,6 +141,7 @@ export default function ApplicationDetailPage() {
                     </div>
                   </div>
 
+                  {/* Benefits */}
                   <div>
                     <h3 className="mb-2 font-semibold">Benefits</h3>
                     <div className="rounded-lg bg-primary/5 p-4">
@@ -139,6 +149,7 @@ export default function ApplicationDetailPage() {
                     </div>
                   </div>
 
+                  {/* Applicant Info */}
                   <div>
                     <h3 className="mb-2 font-semibold">Applicant Information</h3>
                     <div className="space-y-2 rounded-lg border p-4">
@@ -156,17 +167,21 @@ export default function ApplicationDetailPage() {
                       </div>
                     </div>
                   </div>
+
                 </div>
               </CardContent>
             </Card>
 
-            {/* Timeline */}
+            {/* TIMELINE */}
             <Card>
               <CardHeader>
                 <CardTitle>Application Timeline</CardTitle>
               </CardHeader>
+
               <CardContent>
                 <div className="space-y-4">
+
+                  {/* Submitted */}
                   <div className="flex gap-4">
                     <div className="flex flex-col items-center">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -174,22 +189,26 @@ export default function ApplicationDetailPage() {
                       </div>
                       <div className="h-full w-0.5 bg-primary" />
                     </div>
+
                     <div className="flex-1 pb-4">
                       <p className="font-semibold">Application Submitted</p>
                       <p className="text-sm text-muted-foreground">{formatDate(application.submitted_at)}</p>
                     </div>
                   </div>
 
+                  {/* Under Review */}
                   {(application.status === 'under_review' || application.status === 'approved' || application.status === 'rejected') && (
                     <div className="flex gap-4">
                       <div className="flex flex-col items-center">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <FileText className="h-4 w-4" />
                         </div>
+
                         {(application.status === 'approved' || application.status === 'rejected') && (
                           <div className="h-full w-0.5 bg-primary" />
                         )}
                       </div>
+
                       <div className="flex-1 pb-4">
                         <p className="font-semibold">Under Review</p>
                         <p className="text-sm text-muted-foreground">
@@ -199,13 +218,13 @@ export default function ApplicationDetailPage() {
                     </div>
                   )}
 
+                  {/* Approved */}
                   {application.status === 'approved' && (
                     <div className="flex gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success text-success-foreground">
-                          <CheckCircle className="h-4 w-4" />
-                        </div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success text-success-foreground">
+                        <CheckCircle className="h-4 w-4" />
                       </div>
+
                       <div className="flex-1">
                         <p className="font-semibold text-success">Application Approved</p>
                         <p className="text-sm text-muted-foreground">
@@ -215,13 +234,13 @@ export default function ApplicationDetailPage() {
                     </div>
                   )}
 
+                  {/* Rejected */}
                   {application.status === 'rejected' && (
                     <div className="flex gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
-                          <XCircle className="h-4 w-4" />
-                        </div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
+                        <XCircle className="h-4 w-4" />
                       </div>
+
                       <div className="flex-1">
                         <p className="font-semibold text-destructive">Application Rejected</p>
                         <p className="text-sm text-muted-foreground">
@@ -231,31 +250,21 @@ export default function ApplicationDetailPage() {
                     </div>
                   )}
 
-                  {application.status === 'submitted' && (
-                    <div className="flex gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-muted-foreground">Awaiting Review</p>
-                        <p className="text-sm text-muted-foreground">Your application will be reviewed soon</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
+
           </div>
 
-          {/* Sidebar */}
+          {/* SIDEBAR */}
           <div className="space-y-4">
-            {/* Status Card */}
+
+            {/* Status */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Current Status</CardTitle>
               </CardHeader>
+
               <CardContent>
                 {application.status === 'submitted' && (
                   <div className="flex items-start gap-3">
@@ -263,7 +272,7 @@ export default function ApplicationDetailPage() {
                     <div>
                       <p className="mb-1 font-semibold">Pending Review</p>
                       <p className="text-sm text-muted-foreground">
-                        Your application has been submitted and is awaiting review by the authorities.
+                        Your application has been submitted and is awaiting review.
                       </p>
                     </div>
                   </div>
@@ -275,7 +284,7 @@ export default function ApplicationDetailPage() {
                     <div>
                       <p className="mb-1 font-semibold">Under Review</p>
                       <p className="text-sm text-muted-foreground">
-                        Your application is currently being reviewed. You will be notified once a decision is made.
+                        Your application is currently under review.
                       </p>
                     </div>
                   </div>
@@ -287,7 +296,7 @@ export default function ApplicationDetailPage() {
                     <div>
                       <p className="mb-1 font-semibold text-success">Approved</p>
                       <p className="text-sm text-muted-foreground">
-                        Congratulations! Your application has been approved. Benefits will be processed soon.
+                        Congratulations! Your application is approved.
                       </p>
                     </div>
                   </div>
@@ -299,28 +308,30 @@ export default function ApplicationDetailPage() {
                     <div>
                       <p className="mb-1 font-semibold text-destructive">Rejected</p>
                       <p className="text-sm text-muted-foreground">
-                        Unfortunately, your application has been rejected. Please contact support for more information.
+                        Unfortunately, your application was rejected.
                       </p>
                     </div>
                   </div>
                 )}
+
               </CardContent>
             </Card>
 
-            {/* Help Card */}
+            {/* Help */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Need Help?</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Have questions about your application status?
+                  Have questions about your application?
                 </p>
                 <Button variant="outline" className="w-full">
                   Contact Support
                 </Button>
               </CardContent>
             </Card>
+
           </div>
         </div>
       </div>
