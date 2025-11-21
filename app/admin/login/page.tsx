@@ -15,32 +15,52 @@ export default function AdminLoginPage() {
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
 
-  // ⭐ Correct BASE URL usage
-  const API =process.env.NEXT_PUBLIC_API_URL;
+  // Correct and safe BASE URL usage (fall back to empty string so build does not fail)
+  const API = process.env.NEXT_PUBLIC_API_URL || ''
+
+  const safeJson = async (res: Response) => {
+    try {
+      return await res.json()
+    } catch (err) {
+      console.warn('Failed to parse JSON response', err)
+      return null
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      if (!API) {
+        alert('Server base URL is not configured. Please set NEXT_PUBLIC_API_URL.')
+        console.error('NEXT_PUBLIC_API_URL is missing')
+        return
+      }
+
       const response = await fetch(`${API}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, password })
       })
 
-      const data = await response.json()
+      const data = await safeJson(response)
 
       if (response.ok) {
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify({ role: 'admin' }))
-        router.push('/admin')
+        if (!data?.token) {
+          console.warn('Login response OK but token missing', data)
+          alert('Login succeeded but token missing from server response.')
+        } else {
+          localStorage.setItem('token', data.token)
+          localStorage.setItem('user', JSON.stringify({ role: 'admin' })) // backend does not return user object per your note
+          router.push('/admin')
+        }
       } else {
-        alert(data.message || 'Invalid credentials')
+        alert(data?.message || 'Invalid credentials')
       }
     } catch (err) {
+      console.error('Network or unexpected error during admin login:', err)
       alert('Error connecting to server')
-      console.error(err)
     } finally {
       setLoading(false)
     }
