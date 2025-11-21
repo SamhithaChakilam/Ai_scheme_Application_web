@@ -15,7 +15,10 @@ export default function AdminLoginPage() {
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
 
-  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'; // ⭐ Fix: use your Render backend
+  // ⭐ Correct BASE URL usage
+  const API =
+    process.env.NEXT_PUBLIC_API_URL ||
+    'https://ai-scheme-application-web.onrender.com'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,20 +28,21 @@ export default function AdminLoginPage() {
       const response = await fetch(`${API}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, password }),
+        body: JSON.stringify({ user_id: userId, password })
       })
 
       const data = await response.json()
 
       if (response.ok) {
         localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify({ role: 'admin' })) // backend does not return user object
+        localStorage.setItem('user', JSON.stringify({ role: 'admin' }))
         router.push('/admin')
       } else {
         alert(data.message || 'Invalid credentials')
       }
-    } catch (error) {
+    } catch (err) {
       alert('Error connecting to server')
+      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -65,6 +69,7 @@ export default function AdminLoginPage() {
               Enter your admin credentials to continue
             </CardDescription>
           </CardHeader>
+
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
