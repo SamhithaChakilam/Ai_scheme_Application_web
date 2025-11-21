@@ -31,7 +31,7 @@ interface Scheme {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const API = process.env.NEXT_PUBLIC_API_URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
   const [user, setUser] = useState<User | null>(null)
   const [eligibleSchemes, setEligibleSchemes] = useState<Scheme[]>([])
   const [loading, setLoading] = useState(true)

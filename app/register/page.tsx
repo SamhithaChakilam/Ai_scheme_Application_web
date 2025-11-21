@@ -30,7 +30,7 @@ export default function RegisterPage() {
     dob: ''
   })
 
-  const API = process.env.NEXT_PUBLIC_API_URL   // ⭐ FIX HERE
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'   // ⭐ FIX HERE
 
   const handleDigiLockerAuth = async () => {
     setLoading(true)

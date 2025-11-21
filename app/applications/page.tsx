@@ -25,7 +25,7 @@ interface SchemeDetails {
 
 export default function ApplicationsPage() {
   const router = useRouter()
-  const API = process.env.NEXT_PUBLIC_API_URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
 
   const [applications, setApplications] = useState<Application[]>([])
   const [schemeDetails, setSchemeDetails] = useState<SchemeDetails>({})

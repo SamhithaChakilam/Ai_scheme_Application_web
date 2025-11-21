@@ -27,7 +27,7 @@ export default function SchemesPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [loading, setLoading] = useState(true)
 
-  const API = process.env.NEXT_PUBLIC_API_URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
 
   useEffect(() => {
     const token = localStorage.getItem('token')

@@ -30,7 +30,7 @@ export default function SchemeDetailPage() {
   const params = useParams()
   const schemeId = params.id as string
 
-  const API = process.env.NEXT_PUBLIC_API_URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
 
   const [scheme, setScheme] = useState<Scheme | null>(null)
   const [isEligible, setIsEligible] = useState(false)

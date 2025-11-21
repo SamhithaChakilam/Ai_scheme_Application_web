@@ -32,7 +32,7 @@ export default function ProfilePage() {
   const [editChanges, setEditChanges] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const API = process.env.NEXT_PUBLIC_API_URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
 
   useEffect(() => {
     const token = localStorage.getItem('token')

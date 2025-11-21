@@ -31,7 +31,7 @@ interface Scheme {
 export default function ApplicationDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const API = process.env.NEXT_PUBLIC_API_URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
   const applicationId = params.id as string
 
   const [application, setApplication] = useState<Application | null>(null)
