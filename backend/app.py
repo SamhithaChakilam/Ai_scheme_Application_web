@@ -1,10 +1,12 @@
-from flask import Flask, request, jsonify
+# backend/app.py
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from functools import wraps
 import jwt
 import os
 
+# Local imports (make sure these modules exist in your backend folder)
 from digilocker_integration import (
     initiate_digilocker_auth,
     check_digilocker_session,
@@ -20,73 +22,77 @@ from db import (
     edit_requests_collection
 )
 
-app = Flask(__name__)
+# ---------- App & Config ----------
+app = Flask(__name__, static_folder="static", template_folder="templates")
 
-# CORS configuration
+# Load secret key from environment; replace in production with a secure random string
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-key-in-production")
+
+# Allowed origins: include your Vercel frontend and localhost for development
+VERCEL_ORIGIN = "https://ai-scheme-application-web.vercel.app"
+LOCAL_ORIGIN = "http://localhost:3000"
+
 CORS(
     app,
-    resources={r"/api/*": {"origins": "*"}},
+    resources={r"/api/*": {"origins": [VERCEL_ORIGIN, LOCAL_ORIGIN]}},
     supports_credentials=True
 )
 
-# Secret key for JWT
-app.config["SECRET_KEY"] = os.environ.get(
-    "SECRET_KEY",
-    "change-this-secret-key-in-production"
-)
-
-# Hardcoded admin credentials
+# Hardcoded admin credentials (consider moving to env or DB in production)
 ADMIN_CREDENTIALS = {
     "user_id": "Samhitha",
     "password": "Admin@sam"
 }
 
-# ---------------- ROOT ROUTE ---------------- #
-@app.route("/")
-def home():
-    return jsonify({"status": "Backend is running. Use /api/* endpoints."}), 200
+# ---------- Helpers ----------
+def clean_doc(doc):
+    """Remove MongoDB internal fields before returning to client."""
+    if not doc:
+        return doc
+    doc = dict(doc)
+    doc.pop("_id", None)
+    return doc
 
-# ---------------- JWT HELPERS ---------------- #
+def _decode_jwt_token(token):
+    """Decode JWT token and return payload or raise appropriate error."""
+    try:
+        payload = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise
+    except jwt.InvalidTokenError:
+        raise
+
+# ---------- Auth decorators ----------
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get("Authorization")
-
         if not token:
             return jsonify({"message": "Token is missing"}), 401
 
+        if token.startswith("Bearer "):
+            token = token.split(" ", 1)[1].strip()
+
         try:
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
-
-            data = jwt.decode(
-                token,
-                app.config["SECRET_KEY"],
-                algorithms=["HS256"]
-            )
-
-            lookup_key = data.get("aadhaar", data.get("user_id"))
-            current_user = None
-
-            if lookup_key:
-                current_user = users_collection.find_one(
-                    {"aadhaar": lookup_key},
-                    {"_id": 0}
-                )
-
-            if not current_user and data.get("user_id") == ADMIN_CREDENTIALS["user_id"]:
-                current_user = {
-                    "user_id": ADMIN_CREDENTIALS["user_id"],
-                    "role": "admin"
-                }
-
-            if not current_user:
-                return jsonify({"message": "User not found"}), 404
-
+            data = _decode_jwt_token(token)
         except jwt.ExpiredSignatureError:
             return jsonify({"message": "Token has expired"}), 401
         except Exception:
-            return jsonify({"message": "Token is invalid or expired"}), 401
+            return jsonify({"message": "Token is invalid"}), 401
+
+        lookup_key = data.get("aadhaar") or data.get("user_id")
+        current_user = None
+
+        if lookup_key:
+            current_user = users_collection.find_one({"aadhaar": lookup_key}, {"_id": 0})
+
+        # If token is admin token, create admin user object
+        if not current_user and data.get("user_id") == ADMIN_CREDENTIALS["user_id"]:
+            current_user = {"user_id": ADMIN_CREDENTIALS["user_id"], "role": "admin"}
+
+        if not current_user:
+            return jsonify({"message": "User not found"}), 404
 
         return f(current_user, *args, **kwargs)
 
@@ -96,61 +102,51 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get("Authorization")
-
         if not token:
             return jsonify({"message": "Token is missing"}), 401
 
+        if token.startswith("Bearer "):
+            token = token.split(" ", 1)[1].strip()
+
         try:
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
-
-            data = jwt.decode(
-                token,
-                app.config["SECRET_KEY"],
-                algorithms=["HS256"]
-            )
-
-            lookup_key = data.get("aadhaar", data.get("user_id"))
-            current_user = None
-
-            if lookup_key:
-                current_user = users_collection.find_one(
-                    {"aadhaar": lookup_key},
-                    {"_id": 0}
-                )
-
-            if not current_user and data.get("user_id") == ADMIN_CREDENTIALS["user_id"]:
-                current_user = {
-                    "user_id": ADMIN_CREDENTIALS["user_id"],
-                    "role": "admin"
-                }
-
-            if not current_user or current_user.get("role") != "admin":
-                return jsonify({"message": "Admin access required"}), 403
-
+            data = _decode_jwt_token(token)
         except jwt.ExpiredSignatureError:
             return jsonify({"message": "Token has expired"}), 401
         except Exception:
             return jsonify({"message": "Token is invalid"}), 401
 
+        lookup_key = data.get("aadhaar") or data.get("user_id")
+        current_user = None
+
+        if lookup_key:
+            current_user = users_collection.find_one({"aadhaar": lookup_key}, {"_id": 0})
+
+        if not current_user and data.get("user_id") == ADMIN_CREDENTIALS["user_id"]:
+            current_user = {"user_id": ADMIN_CREDENTIALS["user_id"], "role": "admin"}
+
+        if not current_user or current_user.get("role") != "admin":
+            return jsonify({"message": "Admin access required"}), 403
+
         return f(current_user, *args, **kwargs)
 
     return decorated
 
-# ---------------- AUTH ROUTES ---------------- #
+# ---------- Routes ----------
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"status": "Backend is running. Use /api/* endpoints."}), 200
+
+# ---------- AUTH ROUTES ----------
 @app.route("/api/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
 
     aadhaar = data.get("aadhaar")
-
     if not aadhaar:
         return jsonify({"message": "Aadhaar number is required"}), 400
 
     if users_collection.find_one({"aadhaar": aadhaar}):
-        return jsonify(
-            {"message": "User already exists with this Aadhaar number"}
-        ), 400
+        return jsonify({"message": "User already exists with this Aadhaar number"}), 400
 
     user_data = {
         "aadhaar": aadhaar,
@@ -166,7 +162,7 @@ def register():
         "documents": data.get("documents", {}),
         "role": "user",
         "frozen": True,
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.utcnow().isoformat()
     }
 
     users_collection.insert_one(user_data)
@@ -180,24 +176,23 @@ def register():
         algorithm="HS256"
     )
 
-    user_data.pop("_id", None)
+    user_out = clean_doc(user_data)
 
-    return jsonify(
-        {
-            "message": "User registered successfully",
-            "token": token,
-            "user": user_data
-        }
-    ), 201
+    # PyJWT >= 2.0 returns str; ensure consistent return type
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
+
+    return jsonify({"message": "User registered successfully", "token": token, "user": user_out}), 201
 
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
     aadhaar = data.get("aadhaar")
+    if not aadhaar:
+        return jsonify({"message": "Aadhaar number is required"}), 400
 
     user = users_collection.find_one({"aadhaar": aadhaar}, {"_id": 0})
-
-    if not aadhaar or not user:
+    if not user:
         return jsonify({"message": "Invalid Aadhaar number"}), 401
 
     token = jwt.encode(
@@ -209,13 +204,10 @@ def login():
         algorithm="HS256"
     )
 
-    return jsonify(
-        {
-            "message": "Login successful",
-            "token": token,
-            "user": user
-        }
-    ), 200
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
+
+    return jsonify({"message": "Login successful", "token": token, "user": user}), 200
 
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
@@ -223,10 +215,7 @@ def admin_login():
     user_id = data.get("user_id")
     password = data.get("password")
 
-    if (
-        user_id == ADMIN_CREDENTIALS["user_id"]
-        and password == ADMIN_CREDENTIALS["password"]
-    ):
+    if user_id == ADMIN_CREDENTIALS["user_id"] and password == ADMIN_CREDENTIALS["password"]:
         token = jwt.encode(
             {
                 "user_id": user_id,
@@ -236,34 +225,30 @@ def admin_login():
             algorithm="HS256"
         )
 
-        return jsonify(
-            {
-                "message": "Admin login successful",
-                "token": token
-            }
-        ), 200
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+
+        return jsonify({"message": "Admin login successful", "token": token}), 200
 
     return jsonify({"message": "Invalid admin credentials"}), 401
 
-# ---------------- USER ROUTES ---------------- #
+# ---------- USER ROUTES ----------
 @app.route("/api/profile", methods=["GET"])
 @token_required
 def get_profile(current_user):
     return jsonify(current_user), 200
 
-# ---------------- SCHEMES ROUTES ---------------- #
+# ---------- SCHEMES ----------
 @app.route("/api/schemes", methods=["GET"])
 def get_all_schemes():
-    all_schemes = list(schemes_collection.find({}, {"_id": 0}))
+    all_schemes = [clean_doc(s) for s in list(schemes_collection.find({}, {"_id": 0}))]
     return jsonify(all_schemes), 200
 
 @app.route("/api/schemes/<scheme_id>", methods=["GET"])
 def get_scheme_details(scheme_id):
     scheme = schemes_collection.find_one({"id": scheme_id}, {"_id": 0})
-
     if not scheme:
         return jsonify({"message": "Scheme not found"}), 404
-
     return jsonify(scheme), 200
 
 @app.route("/api/schemes/eligible", methods=["POST"])
@@ -271,12 +256,18 @@ def get_scheme_details(scheme_id):
 def check_eligible_schemes(current_user):
     def dummy_eligibility_checker(user, scheme):
         criteria = scheme.get("eligibility_criteria", {})
-        income_limit = criteria.get("max_income", None)
-        min_age = criteria.get("min_age", None)
-        max_age = criteria.get("max_age", None)
+        income_limit = criteria.get("max_income")
+        min_age = criteria.get("min_age")
+        max_age = criteria.get("max_age")
 
-        user_income = int(user.get("income", 0) or 0)
-        user_age = int(user.get("age", 0) or 0)
+        try:
+            user_income = int(user.get("income", 0) or 0)
+        except Exception:
+            user_income = 0
+        try:
+            user_age = int(user.get("age", 0) or 0)
+        except Exception:
+            user_age = 0
 
         if income_limit is not None and user_income > int(income_limit):
             return False, 0.8, "Income exceeds limit"
@@ -291,28 +282,13 @@ def check_eligible_schemes(current_user):
     eligible_schemes = []
 
     for scheme in all_schemes:
-        is_eligible, confidence, reason = dummy_eligibility_checker(
-            current_user, scheme
-        )
-
+        is_eligible, confidence, reason = dummy_eligibility_checker(current_user, scheme)
         if is_eligible:
-            eligible_schemes.append(
-                {
-                    **scheme,
-                    "eligibility_confidence": confidence,
-                    "eligibility_reason": reason
-                }
-            )
+            eligible_schemes.append({**scheme, "eligibility_confidence": confidence, "eligibility_reason": reason})
 
-    return jsonify(
-        {
-            "total_schemes": len(all_schemes),
-            "eligible_count": len(eligible_schemes),
-            "eligible_schemes": eligible_schemes
-        }
-    ), 200
+    return jsonify({"total_schemes": len(all_schemes), "eligible_count": len(eligible_schemes), "eligible_schemes": eligible_schemes}), 200
 
-# ---------------- USER APPLICATIONS ---------------- #
+# ---------- USER APPLICATIONS ----------
 @app.route("/api/applications", methods=["GET"])
 @token_required
 def get_user_applications(current_user):
@@ -320,12 +296,7 @@ def get_user_applications(current_user):
     if not aadhaar:
         return jsonify({"message": "User Aadhaar missing"}), 400
 
-    apps = list(
-        applications_collection.find(
-            {"aadhaar": aadhaar},
-            {"_id": 0}
-        )
-    )
+    apps = [clean_doc(a) for a in list(applications_collection.find({"aadhaar": aadhaar}, {"_id": 0}))]
     return jsonify(apps), 200
 
 @app.route("/api/applications", methods=["POST"])
@@ -342,16 +313,11 @@ def create_application(current_user):
     }
 
     applications_collection.insert_one(application)
-    application.pop("_id", None)
+    application_out = clean_doc(application)
 
-    return jsonify(
-        {
-            "message": "Application created successfully",
-            "application": application
-        }
-    ), 201
+    return jsonify({"message": "Application created successfully", "application": application_out}), 201
 
-# ---------------- USER EDIT REQUESTS ---------------- #
+# ---------- EDIT REQUESTS ----------
 @app.route("/api/edit-request", methods=["POST"])
 @token_required
 def create_edit_request(current_user):
@@ -364,35 +330,40 @@ def create_edit_request(current_user):
     }
 
     edit_requests_collection.insert_one(request_data)
-    request_data.pop("_id", None)
+    request_out = clean_doc(request_data)
 
-    return jsonify(
-        {
-            "message": "Edit request submitted successfully",
-            "request": request_data
-        }
-    ), 201
+    return jsonify({"message": "Edit request submitted successfully", "request": request_out}), 201
 
-# ---------------- ADMIN ROUTES ---------------- #
+# ---------- ADMIN ROUTES ----------
 @app.route("/api/admin/applications", methods=["GET"])
 @admin_required
 def admin_all_applications(current_user):
-    all_apps = list(applications_collection.find({}, {"_id": 0}))
+    all_apps = [clean_doc(a) for a in list(applications_collection.find({}, {"_id": 0}))]
     return jsonify(all_apps), 200
 
 @app.route("/api/admin/edit-requests", methods=["GET"])
 @admin_required
 def admin_edit_requests(current_user):
-    all_requests = list(edit_requests_collection.find({}, {"_id": 0}))
+    all_requests = [clean_doc(r) for r in list(edit_requests_collection.find({}, {"_id": 0}))]
     return jsonify(all_requests), 200
 
 @app.route("/api/admin/schemes", methods=["GET"])
 @admin_required
 def admin_all_schemes(current_user):
-    all_schemes = list(schemes_collection.find({}, {"_id": 0}))
+    all_schemes = [clean_doc(s) for s in list(schemes_collection.find({}, {"_id": 0}))]
     return jsonify(all_schemes), 200
 
-# ---------------- MAIN ---------------- #
+# ---------- Optional: serve SPA files if any (not required for Render + Vercel separation) ----------
+@app.route("/<path:path>")
+def serve_static(path):
+    # If you ever decide to bundle front and back, this serves static files from backend/static
+    static_dir = app.static_folder or "static"
+    if os.path.exists(os.path.join(static_dir, path)):
+        return send_from_directory(static_dir, path)
+    return jsonify({"message": "Not found"}), 404
+
+# ---------- Main ----------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    debug = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+    app.run(debug=debug, host="0.0.0.0", port=port)
