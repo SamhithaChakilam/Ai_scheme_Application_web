@@ -16,6 +16,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [digilockerStep, setDigilockerStep] = useState<'init' | 'consent' | 'complete'>('init')
   const [sessionId, setSessionId] = useState('')
+  const [activeTab, setActiveTab] = useState<'digilocker' | 'manual'>('digilocker')
+
   const [formData, setFormData] = useState({
     aadhaar: '',
     name: '',
@@ -30,41 +32,27 @@ export default function RegisterPage() {
     dob: ''
   })
 
-  // Use env var with fallback to localhost for local dev
+  // Use environment variable, fallback to localhost during local dev
   const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
-  // Helper to safely parse JSON responses
-  const parseJSON = async (res: Response) => {
-    try {
-      return await res.json()
-    } catch {
-      return null
-    }
-  }
 
   const handleDigiLockerAuth = async () => {
     setLoading(true)
     try {
       const response = await fetch(`${API}/api/digilocker/initiate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' }
       })
+      const data = await response.json()
 
-      const data = await parseJSON(response)
-
-      if (response.ok && data && data.success) {
+      if (response.ok && data.success) {
         setSessionId(data.session_id)
         setDigilockerStep('consent')
-        alert(
-          `DigiLocker Session Started!\n\nIn production you'd be redirected to:\n${data.consent_url || 'consent_url'}\n\nFor sandbox, we'll simulate consent.`
-        )
+        alert(`DigiLocker Session Started!\n\nIn production you'd be redirected to: ${data.consent_url}\n\nFor sandbox we simulate consent.`)
       } else {
-        alert((data && data.message) || 'Failed to initiate DigiLocker')
+        alert(data.message || 'Failed to initiate DigiLocker')
       }
-    } catch (error) {
-      console.error(error)
+    } catch (err) {
+      console.error(err)
       alert('Error connecting to server')
     } finally {
       setLoading(false)
@@ -76,63 +64,51 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
-      // Basic validation
-      if (!formData.aadhaar || formData.aadhaar.trim().length < 12) {
-        alert('Please enter a valid Aadhaar number (12 digits).')
-        setLoading(false)
-        return
-      }
-
       const consentResponse = await fetch(`${API}/api/digilocker/simulate-consent`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
-          aadhaar_number: formData.aadhaar.trim(),
-          name: formData.name.trim(),
+          aadhaar_number: formData.aadhaar,
+          name: formData.name,
           dob: formData.dob,
           gender: formData.gender,
-          state: formData.state.trim(),
-          district: formData.district.trim()
-        }),
+          state: formData.state,
+          district: formData.district
+        })
       })
 
-      const consentData = await parseJSON(consentResponse)
+      const consentData = await consentResponse.json()
 
-      if (consentResponse.ok && consentData && consentData.success) {
+      if (consentResponse.ok && consentData.success) {
         const registerResponse = await fetch(`${API}/api/register-with-digilocker`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: sessionId,
-            email: formData.email?.trim() || '',
-            phone: formData.phone?.trim() || '',
-            caste: formData.caste || '',
-            income: Number(formData.income) || 0,
-            age: Number(formData.age) || 0,
-          }),
+            email: formData.email,
+            phone: formData.phone,
+            caste: formData.caste,
+            income: parseInt(formData.income || '0', 10),
+            age: parseInt(formData.age || '0', 10)
+          })
         })
 
-        const registerData = await parseJSON(registerResponse)
+        const registerData = await registerResponse.json()
 
-        if (registerResponse.ok && registerData) {
-          // store token/user as backend returns
-          if (registerData.token) localStorage.setItem('token', registerData.token)
-          if (registerData.user) localStorage.setItem('user', JSON.stringify(registerData.user))
+        if (registerResponse.ok) {
+          localStorage.setItem('token', registerData.token)
+          localStorage.setItem('user', JSON.stringify(registerData.user))
           setDigilockerStep('complete')
           setTimeout(() => router.push('/dashboard'), 1200)
         } else {
-          alert((registerData && registerData.message) || 'Registration failed')
+          alert(registerData.message || 'Registration failed')
         }
       } else {
-        alert((consentData && consentData.message) || 'Consent failed')
+        alert(consentData.message || 'Consent failed')
       }
-    } catch (error) {
-      console.error(error)
+    } catch (err) {
+      console.error(err)
       alert('Error connecting to server')
     } finally {
       setLoading(false)
@@ -144,42 +120,32 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
-      // Basic validation
-      if (!formData.aadhaar || formData.aadhaar.trim().length < 12) {
-        alert('Please enter a valid Aadhaar number (12 digits).')
-        setLoading(false)
-        return
-      }
-
       const response = await fetch(`${API}/api/register`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          aadhaar: formData.aadhaar.trim(),
-          age: Number(formData.age) || undefined,
-          income: Number(formData.income) || undefined,
+          age: parseInt(formData.age || '0', 10),
+          income: parseInt(formData.income || '0', 10),
           documents: {
             aadhaar: 'uploaded',
             caste_certificate: 'uploaded',
             income_certificate: 'uploaded'
           }
-        }),
+        })
       })
 
-      const data = await parseJSON(response)
+      const data = await response.json()
 
-      if (response.ok && data) {
-        if (data.token) localStorage.setItem('token', data.token)
-        if (data.user) localStorage.setItem('user', JSON.stringify(data.user))
+      if (response.ok) {
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
         router.push('/dashboard')
       } else {
-        alert((data && data.message) || 'Registration failed')
+        alert(data.message || 'Registration failed')
       }
-    } catch (error) {
-      console.error(error)
+    } catch (err) {
+      console.error(err)
       alert('Error connecting to server')
     } finally {
       setLoading(false)
@@ -200,55 +166,38 @@ export default function RegisterPage() {
               <span className="text-sm text-muted-foreground">One Aadhaar, One Account</span>
             </div>
             <h1 className="mb-2 text-3xl font-bold">Create Your Account</h1>
-            <p className="text-muted-foreground">
-              Register once and discover all schemes you qualify for
-            </p>
+            <p className="text-muted-foreground">Register once and discover all schemes you qualify for</p>
           </div>
 
           <Card>
             <CardHeader>
               <CardTitle>Registration Form</CardTitle>
-              <CardDescription>
-                Choose your preferred registration method
-              </CardDescription>
+              <CardDescription>Choose your preferred registration method</CardDescription>
             </CardHeader>
+
             <CardContent>
-              <Tabs defaultValue="digilocker" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+              {/* Controlled Tabs: using activeTab state prevents mismatch */}
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'digilocker' | 'manual')}>
+                <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="digilocker">DigiLocker (Recommended)</TabsTrigger>
                   <TabsTrigger value="manual">Manual Registration</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="digilocker" className="space-y-6 pt-6">
+                {/* DIGILOCKER */}
+                <TabsContent value="digilocker" className="pt-6">
                   {digilockerStep === 'init' && (
                     <div className="space-y-4">
                       <div className="rounded-lg border bg-blue-50 p-4">
                         <h3 className="mb-2 font-semibold text-blue-900">Why Use DigiLocker?</h3>
                         <ul className="space-y-1 text-sm text-blue-700">
-                          <li className="flex items-center gap-2">
-                            <Check className="h-4 w-4" />
-                            Instant Aadhaar verification
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <Check className="h-4 w-4" />
-                            Auto-fill verified details
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <Check className="h-4 w-4" />
-                            Secure government authentication
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <Check className="h-4 w-4" />
-                            No manual document upload needed
-                          </li>
+                          <li className="flex items-center gap-2"><Check className="h-4 w-4" /> Instant Aadhaar verification</li>
+                          <li className="flex items-center gap-2"><Check className="h-4 w-4" /> Auto-fill verified details</li>
+                          <li className="flex items-center gap-2"><Check className="h-4 w-4" /> Secure government authentication</li>
+                          <li className="flex items-center gap-2"><Check className="h-4 w-4" /> No manual document upload needed</li>
                         </ul>
                       </div>
 
-                      <Button
-                        onClick={handleDigiLockerAuth}
-                        className="w-full"
-                        disabled={loading}
-                      >
+                      <Button onClick={handleDigiLockerAuth} className="w-full" disabled={loading}>
                         {loading ? 'Initiating...' : 'Continue with DigiLocker'}
                       </Button>
                     </div>
@@ -257,55 +206,32 @@ export default function RegisterPage() {
                   {digilockerStep === 'consent' && (
                     <form onSubmit={handleDigiLockerConsent} className="space-y-4">
                       <div className="rounded-lg border bg-green-50 p-4">
-                        <p className="text-sm text-green-800">
-                          DigiLocker session initiated. Please provide your Aadhaar details to simulate the consent process.
-                        </p>
-                        <p className="mt-2 text-xs text-green-600">
-                          Session ID: {sessionId}
-                        </p>
+                        <p className="text-sm text-green-800">DigiLocker session initiated. Provide Aadhaar details to simulate consent.</p>
+                        <p className="mt-2 text-xs text-green-600">Session ID: {sessionId}</p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="dl-aadhaar">Aadhaar Number *</Label>
-                        <Input
-                          id="dl-aadhaar"
-                          placeholder="XXXX XXXX XXXX"
-                          value={formData.aadhaar}
-                          onChange={(e) => handleChange('aadhaar', e.target.value.replace(/\s+/g, ''))}
-                          required
-                          maxLength={12}
-                        />
-                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="dl-aadhaar">Aadhaar Number *</Label>
+                          <Input id="dl-aadhaar" placeholder="XXXX XXXX XXXX" value={formData.aadhaar} onChange={(e) => handleChange('aadhaar', e.target.value)} required maxLength={12} />
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="dl-name">Full Name *</Label>
-                        <Input
-                          id="dl-name"
-                          placeholder="As per Aadhaar"
-                          value={formData.name}
-                          onChange={(e) => handleChange('name', e.target.value)}
-                          required
-                        />
+                        <div className="space-y-2">
+                          <Label htmlFor="dl-name">Full Name *</Label>
+                          <Input id="dl-name" placeholder="As per Aadhaar" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} required />
+                        </div>
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label htmlFor="dl-dob">Date of Birth *</Label>
-                          <Input
-                            id="dl-dob"
-                            type="date"
-                            value={formData.dob}
-                            onChange={(e) => handleChange('dob', e.target.value)}
-                            required
-                          />
+                          <Input id="dl-dob" type="date" value={formData.dob} onChange={(e) => handleChange('dob', e.target.value)} required />
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="dl-gender">Gender *</Label>
-                          <Select value={formData.gender} onValueChange={(value) => handleChange('gender', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select gender" />
-                            </SelectTrigger>
+                          <Select value={formData.gender} onValueChange={(v) => handleChange('gender', v)}>
+                            <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="male">Male</SelectItem>
                               <SelectItem value="female">Female</SelectItem>
@@ -318,68 +244,37 @@ export default function RegisterPage() {
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label htmlFor="dl-state">State *</Label>
-                          <Input
-                            id="dl-state"
-                            placeholder="Enter state"
-                            value={formData.state}
-                            onChange={(e) => handleChange('state', e.target.value)}
-                            required
-                          />
+                          <Input id="dl-state" value={formData.state} onChange={(e) => handleChange('state', e.target.value)} required />
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="dl-district">District *</Label>
-                          <Input
-                            id="dl-district"
-                            placeholder="Enter district"
-                            value={formData.district}
-                            onChange={(e) => handleChange('district', e.target.value)}
-                            required
-                          />
+                          <Input id="dl-district" value={formData.district} onChange={(e) => handleChange('district', e.target.value)} required />
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="dl-email">Email Address</Label>
-                        <Input
-                          id="dl-email"
-                          type="email"
-                          placeholder="your@email.com"
-                          value={formData.email}
-                          onChange={(e) => handleChange('email', e.target.value)}
-                        />
-                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="dl-email">Email</Label>
+                          <Input id="dl-email" type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} />
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="dl-phone">Phone Number *</Label>
-                        <Input
-                          id="dl-phone"
-                          placeholder="10-digit number"
-                          value={formData.phone}
-                          onChange={(e) => handleChange('phone', e.target.value.replace(/\D/g, ''))}
-                          required
-                        />
+                        <div className="space-y-2">
+                          <Label htmlFor="dl-phone">Phone *</Label>
+                          <Input id="dl-phone" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} required />
+                        </div>
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-3">
                         <div className="space-y-2">
                           <Label htmlFor="dl-age">Age *</Label>
-                          <Input
-                            id="dl-age"
-                            type="number"
-                            placeholder="Age"
-                            value={formData.age}
-                            onChange={(e) => handleChange('age', e.target.value)}
-                            required
-                          />
+                          <Input id="dl-age" type="number" value={formData.age} onChange={(e) => handleChange('age', e.target.value)} required />
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="dl-caste">Caste Category *</Label>
-                          <Select value={formData.caste} onValueChange={(value) => handleChange('caste', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Category" />
-                            </SelectTrigger>
+                          <Label htmlFor="dl-caste">Caste *</Label>
+                          <Select value={formData.caste} onValueChange={(v) => handleChange('caste', v)}>
+                            <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="general">General</SelectItem>
                               <SelectItem value="sc">SC</SelectItem>
@@ -392,14 +287,7 @@ export default function RegisterPage() {
 
                         <div className="space-y-2">
                           <Label htmlFor="dl-income">Annual Income *</Label>
-                          <Input
-                            id="dl-income"
-                            type="number"
-                            placeholder="Income"
-                            value={formData.income}
-                            onChange={(e) => handleChange('income', e.target.value)}
-                            required
-                          />
+                          <Input id="dl-income" type="number" value={formData.income} onChange={(e) => handleChange('income', e.target.value)} required />
                         </div>
                       </div>
 
@@ -413,83 +301,48 @@ export default function RegisterPage() {
                     <div className="rounded-lg border bg-green-50 p-6 text-center">
                       <Check className="mx-auto mb-4 h-12 w-12 text-green-600" />
                       <h3 className="mb-2 text-lg font-semibold text-green-900">Registration Complete!</h3>
-                      <p className="text-sm text-green-700">
-                        Your account has been verified via DigiLocker. Redirecting to dashboard...
-                      </p>
+                      <p className="text-sm text-green-700">Redirecting to dashboard...</p>
                     </div>
                   )}
                 </TabsContent>
 
-                <TabsContent value="manual" className="space-y-6 pt-6">
+                {/* MANUAL */}
+                <TabsContent value="manual" className="pt-6">
                   <form onSubmit={handleManualSubmit} className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="aadhaar">Aadhaar Number *</Label>
-                      <Input
-                        id="aadhaar"
-                        placeholder="XXXX XXXX XXXX"
-                        value={formData.aadhaar}
-                        onChange={(e) => handleChange('aadhaar', e.target.value.replace(/\s+/g, ''))}
-                        required
-                        maxLength={12}
-                      />
+                      <Input id="aadhaar" placeholder="XXXX XXXX XXXX" value={formData.aadhaar} onChange={(e) => handleChange('aadhaar', e.target.value)} required maxLength={12} />
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="name">Full Name *</Label>
-                        <Input
-                          id="name"
-                          placeholder="As per Aadhaar"
-                          value={formData.name}
-                          onChange={(e) => handleChange('name', e.target.value)}
-                          required
-                        />
+                        <Input id="name" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} required />
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="age">Age *</Label>
-                        <Input
-                          id="age"
-                          type="number"
-                          placeholder="Enter age"
-                          value={formData.age}
-                          onChange={(e) => handleChange('age', e.target.value)}
-                          required
-                        />
+                        <Input id="age" type="number" value={formData.age} onChange={(e) => handleChange('age', e.target.value)} required />
                       </div>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="email">Email Address</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="your@email.com"
-                          value={formData.email}
-                          onChange={(e) => handleChange('email', e.target.value)}
-                        />
+                        <Input id="email" type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} />
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone Number *</Label>
-                        <Input
-                          id="phone"
-                          placeholder="10-digit number"
-                          value={formData.phone}
-                          onChange={(e) => handleChange('phone', e.target.value.replace(/\D/g, ''))}
-                          required
-                        />
+                        <Input id="phone" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} required />
                       </div>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="gender">Gender *</Label>
-                        <Select value={formData.gender} onValueChange={(value) => handleChange('gender', value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select gender" />
-                          </SelectTrigger>
+                        <Select value={formData.gender} onValueChange={(v) => handleChange('gender', v)}>
+                          <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="male">Male</SelectItem>
                             <SelectItem value="female">Female</SelectItem>
@@ -500,10 +353,8 @@ export default function RegisterPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="caste">Caste Category *</Label>
-                        <Select value={formData.caste} onValueChange={(value) => handleChange('caste', value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
+                        <Select value={formData.caste} onValueChange={(v) => handleChange('caste', v)}>
+                          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="general">General</SelectItem>
                             <SelectItem value="sc">SC</SelectItem>
@@ -517,37 +368,18 @@ export default function RegisterPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="income">Annual Income (₹) *</Label>
-                      <Input
-                        id="income"
-                        type="number"
-                        placeholder="Enter annual income"
-                        value={formData.income}
-                        onChange={(e) => handleChange('income', e.target.value)}
-                        required
-                      />
+                      <Input id="income" type="number" value={formData.income} onChange={(e) => handleChange('income', e.target.value)} required />
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="state">State *</Label>
-                        <Input
-                          id="state"
-                          placeholder="Enter state"
-                          value={formData.state}
-                          onChange={(e) => handleChange('state', e.target.value)}
-                          required
-                        />
+                        <Input id="state" value={formData.state} onChange={(e) => handleChange('state', e.target.value)} required />
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="district">District *</Label>
-                        <Input
-                          id="district"
-                          placeholder="Enter district"
-                          value={formData.district}
-                          onChange={(e) => handleChange('district', e.target.value)}
-                          required
-                        />
+                        <Input id="district" value={formData.district} onChange={(e) => handleChange('district', e.target.value)} required />
                       </div>
                     </div>
 
@@ -561,9 +393,7 @@ export default function RegisterPage() {
                         <li>• Caste Certificate (if applicable)</li>
                         <li>• Income Certificate</li>
                       </ul>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Note: For demo purposes, documents are auto-marked as uploaded
-                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">Note: Documents are auto-marked "uploaded" for demo.</p>
                     </div>
 
                     <div className="flex flex-col gap-4">
@@ -573,9 +403,7 @@ export default function RegisterPage() {
 
                       <p className="text-center text-sm text-muted-foreground">
                         Already have an account?{' '}
-                        <Link href="/login" className="text-primary hover:underline">
-                          Sign In
-                        </Link>
+                        <Link href="/login" className="text-primary hover:underline">Sign In</Link>
                       </p>
                     </div>
                   </form>
