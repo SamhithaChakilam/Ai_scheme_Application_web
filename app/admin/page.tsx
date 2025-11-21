@@ -50,9 +50,7 @@ interface Scheme {
 export default function AdminPage() {
   const router = useRouter()
   // Use env var, fallback to your deployed URL
-   const API =
-    process.env.NEXT_PUBLIC_API_URL ||
-    'https://ai-scheme-application-web.onrender.com'
+   const API =process.env.NEXT_PUBLIC_API_URL 
 
   const [editRequests, setEditRequests] = useState<EditRequest[]>([])
   const [applications, setApplications] = useState<Application[]>([])
