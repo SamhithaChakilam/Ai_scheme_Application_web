@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
 
-  const API = process.env.https://ai-scheme-application-web.onrender.com/ // ⭐ Fix: use your Render backend
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'; // ⭐ Fix: use your Render backend
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
