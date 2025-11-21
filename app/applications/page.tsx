@@ -25,6 +25,8 @@ interface SchemeDetails {
 
 export default function ApplicationsPage() {
   const router = useRouter()
+  const API = process.env.NEXT_PUBLIC_API_URL
+
   const [applications, setApplications] = useState<Application[]>([])
   const [schemeDetails, setSchemeDetails] = useState<SchemeDetails>({})
   const [loading, setLoading] = useState(true)
@@ -44,7 +46,7 @@ export default function ApplicationsPage() {
       const token = localStorage.getItem('token')
       
       // Fetch user applications
-      const appsResponse = await fetch('http://localhost:5000/api/applications', {
+      const appsResponse = await fetch(`${API}/api/applications`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -52,8 +54,8 @@ export default function ApplicationsPage() {
       const appsData = await appsResponse.json()
       setApplications(appsData)
 
-      // Fetch scheme details for each application
-      const schemesResponse = await fetch('http://localhost:5000/api/schemes')
+      // Fetch scheme details
+      const schemesResponse = await fetch(`${API}/api/schemes`)
       const schemesData = await schemesResponse.json()
       
       const details: SchemeDetails = {}
@@ -63,6 +65,7 @@ export default function ApplicationsPage() {
           category: scheme.category
         }
       })
+
       setSchemeDetails(details)
 
     } catch (error) {
@@ -88,7 +91,7 @@ export default function ApplicationsPage() {
   }
 
   const getStatusBadge = (status: string) => {
-    const variants: { [key: string]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
+    const variants: any = {
       'submitted': 'outline',
       'under_review': 'secondary',
       'approved': 'default',
@@ -96,10 +99,13 @@ export default function ApplicationsPage() {
     }
     
     return (
-      <Badge variant={variants[status] || 'outline'} className={
-        status === 'approved' ? 'bg-success text-success-foreground' :
-        status === 'submitted' ? 'bg-warning/10 text-warning border-warning' : ''
-      }>
+      <Badge 
+        variant={variants[status] || 'outline'} 
+        className={
+          status === 'approved' ? 'bg-success text-success-foreground' :
+          status === 'submitted' ? 'bg-warning/10 text-warning border-warning' : ''
+        }
+      >
         {status.replace('_', ' ').toUpperCase()}
       </Badge>
     )
@@ -238,36 +244,62 @@ export default function ApplicationsPage() {
                     {/* Status Timeline */}
                     <div className="mt-6 border-t pt-4">
                       <div className="flex items-center justify-between">
-                        <div className={`flex flex-col items-center ${application.status === 'submitted' || application.status === 'under_review' || application.status === 'approved' ? 'text-primary' : 'text-muted-foreground'}`}>
-                          <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${application.status === 'submitted' || application.status === 'under_review' || application.status === 'approved' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                        {/* Submitted */}
+                        <div className={`flex flex-col items-center ${['submitted','under_review','approved'].includes(application.status) ? 'text-primary' : 'text-muted-foreground'}`}>
+                          <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${
+                            ['submitted','under_review','approved'].includes(application.status)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                          }`}>
                             <CheckCircle className="h-4 w-4" />
                           </div>
                           <span className="text-xs">Submitted</span>
                         </div>
-                        
-                        <div className={`h-0.5 flex-1 ${application.status === 'under_review' || application.status === 'approved' ? 'bg-primary' : 'bg-muted'}`} />
-                        
-                        <div className={`flex flex-col items-center ${application.status === 'under_review' || application.status === 'approved' ? 'text-primary' : 'text-muted-foreground'}`}>
-                          <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${application.status === 'under_review' || application.status === 'approved' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+
+                        <div className={`h-0.5 flex-1 ${['under_review','approved'].includes(application.status) ? 'bg-primary' : 'bg-muted'}`} />
+
+                        {/* Under Review */}
+                        <div className={`flex flex-col items-center ${['under_review','approved'].includes(application.status) ? 'text-primary' : 'text-muted-foreground'}`}>
+                          <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${
+                            ['under_review','approved'].includes(application.status)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                          }`}>
                             <FileSearch className="h-4 w-4" />
                           </div>
                           <span className="text-xs">Review</span>
                         </div>
-                        
+
                         <div className={`h-0.5 flex-1 ${application.status === 'approved' ? 'bg-primary' : 'bg-muted'}`} />
-                        
-                        <div className={`flex flex-col items-center ${application.status === 'approved' ? 'text-success' : application.status === 'rejected' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                          <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${application.status === 'approved' ? 'bg-success text-success-foreground' : application.status === 'rejected' ? 'bg-destructive text-destructive-foreground' : 'bg-muted'}`}>
-                            {application.status === 'approved' ? (
-                              <CheckCircle className="h-4 w-4" />
-                            ) : application.status === 'rejected' ? (
-                              <XCircle className="h-4 w-4" />
-                            ) : (
-                              <Clock className="h-4 w-4" />
-                            )}
+
+                        {/* Final Decision */}
+                        <div className={`flex flex-col items-center ${
+                          application.status === 'approved'
+                            ? 'text-success'
+                            : application.status === 'rejected'
+                            ? 'text-destructive'
+                            : 'text-muted-foreground'
+                        }`}>
+                          <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full ${
+                            application.status === 'approved'
+                              ? 'bg-success text-success-foreground'
+                              : application.status === 'rejected'
+                              ? 'bg-destructive text-destructive-foreground'
+                              : 'bg-muted'
+                          }`}>
+                            {application.status === 'approved'
+                              ? <CheckCircle className="h-4 w-4" />
+                              : application.status === 'rejected'
+                              ? <XCircle className="h-4 w-4" />
+                              : <Clock className="h-4 w-4" />
+                            }
                           </div>
                           <span className="text-xs">
-                            {application.status === 'approved' ? 'Approved' : application.status === 'rejected' ? 'Rejected' : 'Decision'}
+                            {application.status === 'approved'
+                              ? 'Approved'
+                              : application.status === 'rejected'
+                              ? 'Rejected'
+                              : 'Decision'}
                           </span>
                         </div>
                       </div>
