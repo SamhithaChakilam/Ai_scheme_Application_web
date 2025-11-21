@@ -32,6 +32,8 @@ export default function ProfilePage() {
   const [editChanges, setEditChanges] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const API = process.env.NEXT_PUBLIC_API_URL
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     const userData = localStorage.getItem('user')
@@ -49,7 +51,8 @@ export default function ProfilePage() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:5000/api/edit-request', {
+
+      const response = await fetch(`${API}/api/edit-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,6 +94,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
+          
           {/* Profile Details */}
           <div className="lg:col-span-2">
             <Card>
@@ -108,7 +112,9 @@ export default function ProfilePage() {
                   Your profile is frozen and cannot be edited directly
                 </CardDescription>
               </CardHeader>
+
               <CardContent className="space-y-6">
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Aadhaar Number</Label>
@@ -163,10 +169,10 @@ export default function ProfilePage() {
                     <Input value={user.district} disabled />
                   </div>
                 </div>
+
               </CardContent>
             </Card>
 
-            {/* Edit Request Form */}
             {showEditRequest && (
               <Card className="mt-6">
                 <CardHeader>
@@ -175,7 +181,9 @@ export default function ProfilePage() {
                     Describe the changes you need and provide a reason
                   </CardDescription>
                 </CardHeader>
+
                 <CardContent className="space-y-4">
+                  
                   <div className="space-y-2">
                     <Label htmlFor="changes">Requested Changes</Label>
                     <Textarea
@@ -205,6 +213,7 @@ export default function ProfilePage() {
                     >
                       {submitting ? 'Submitting...' : 'Submit Request'}
                     </Button>
+
                     <Button 
                       variant="outline"
                       onClick={() => setShowEditRequest(false)}
@@ -212,6 +221,7 @@ export default function ProfilePage() {
                       Cancel
                     </Button>
                   </div>
+
                 </CardContent>
               </Card>
             )}
@@ -219,7 +229,7 @@ export default function ProfilePage() {
 
           {/* Sidebar */}
           <div className="space-y-4">
-            {/* Edit Request Card */}
+
             <Card className="border-warning/50 bg-warning/5">
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -227,10 +237,12 @@ export default function ProfilePage() {
                   <CardTitle className="text-lg">Profile Locked</CardTitle>
                 </div>
               </CardHeader>
+
               <CardContent>
                 <p className="mb-4 text-sm text-muted-foreground">
                   Your profile is frozen to prevent fraud. To make changes, submit an edit request for admin approval.
                 </p>
+
                 {!showEditRequest && (
                   <Button 
                     onClick={() => setShowEditRequest(true)}
@@ -243,7 +255,6 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
-            {/* Documents Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Uploaded Documents</CardTitle>
@@ -254,10 +265,12 @@ export default function ProfilePage() {
                     <span>Aadhaar Card</span>
                     <Badge variant="outline" className="bg-success/10 text-success">Verified</Badge>
                   </div>
+
                   <div className="flex items-center justify-between">
                     <span>Caste Certificate</span>
                     <Badge variant="outline" className="bg-success/10 text-success">Verified</Badge>
                   </div>
+
                   <div className="flex items-center justify-between">
                     <span>Income Certificate</span>
                     <Badge variant="outline" className="bg-success/10 text-success">Verified</Badge>
@@ -265,7 +278,9 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
             </Card>
+
           </div>
+
         </div>
       </div>
     </div>
