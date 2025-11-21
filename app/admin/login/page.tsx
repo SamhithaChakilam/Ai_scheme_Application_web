@@ -15,16 +15,16 @@ export default function AdminLoginPage() {
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
 
+  const API = process.env.NEXT_PUBLIC_API_URL // ⭐ Fix: use your Render backend
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:5000/api/admin/login', {
+      const response = await fetch(`${API}/api/admin/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, password }),
       })
 
@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
 
       if (response.ok) {
         localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
+        localStorage.setItem('user', JSON.stringify({ role: 'admin' })) // backend does not return user object
         router.push('/admin')
       } else {
         alert(data.message || 'Invalid credentials')
@@ -52,9 +52,7 @@ export default function AdminLoginPage() {
             <Shield className="h-8 w-8" />
           </div>
           <h1 className="mb-2 text-3xl font-bold">Admin Login</h1>
-          <p className="text-muted-foreground">
-            Authorized access only
-          </p>
+          <p className="text-muted-foreground">Authorized access only</p>
         </div>
 
         <Card className="border-2 border-primary/20 shadow-lg">
@@ -101,9 +99,7 @@ export default function AdminLoginPage() {
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    Or
-                  </span>
+                  <span className="bg-card px-2 text-muted-foreground">Or</span>
                 </div>
               </div>
 
