@@ -16,9 +16,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('')
 
   // ⭐ Correct BASE URL usage
-  const API =
-    process.env.NEXT_PUBLIC_API_URL ||
-    'https://ai-scheme-application-web.onrender.com'
+  const API =process.env.NEXT_PUBLIC_API_URL 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
