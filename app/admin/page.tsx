@@ -49,7 +49,7 @@ interface Scheme {
 
 export default function AdminPage() {
   const router = useRouter()
-  const API = process.env.https://ai-scheme-application-web.onrender.com/
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com';
 
   const [editRequests, setEditRequests] = useState<EditRequest[]>([])
   const [applications, setApplications] = useState<Application[]>([])
