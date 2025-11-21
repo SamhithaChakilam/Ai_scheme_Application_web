@@ -49,7 +49,8 @@ interface Scheme {
 
 export default function AdminPage() {
   const router = useRouter()
-  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com';
+  // Use env var, fallback to your deployed URL
+  const API = process.env.NEXT_PUBLIC_API_URL || 'https://ai-scheme-application-web.onrender.com'
 
   const [editRequests, setEditRequests] = useState<EditRequest[]>([])
   const [applications, setApplications] = useState<Application[]>([])
@@ -67,6 +68,23 @@ export default function AdminPage() {
     eligibility_criteria: '',
     documents_required: ''
   })
+
+  // small helpers to avoid crashes on invalid JSON/responses
+  const parseJSON = async (res: Response) => {
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+
+  const safeParseCriteria = (text: string) => {
+    try {
+      return text ? JSON.parse(text) : {}
+    } catch {
+      return {}
+    }
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -105,16 +123,19 @@ export default function AdminPage() {
         })
       ])
 
-      const editData = await editResponse.json()
-      const appData = await appResponse.json()
-      const schemeData = await schemeResponse.json()
-      
-      setEditRequests(editData || [])
-      setApplications(appData || [])
-      setSchemes(schemeData || [])
+      const editData = editResponse.ok ? (await parseJSON(editResponse)) : []
+      const appData = appResponse.ok ? (await parseJSON(appResponse)) : []
+      const schemeData = schemeResponse.ok ? (await parseJSON(schemeResponse)) : []
 
+      setEditRequests(Array.isArray(editData) ? editData : [])
+      setApplications(Array.isArray(appData) ? appData : [])
+      setSchemes(Array.isArray(schemeData) ? schemeData : [])
     } catch (error) {
       console.error('Error fetching data:', error)
+      // keep UI responsive; show empty lists
+      setEditRequests([])
+      setApplications([])
+      setSchemes([])
     } finally {
       setLoading(false)
     }
@@ -132,7 +153,7 @@ export default function AdminPage() {
         body: JSON.stringify({ action })
       })
 
-      const data = await response.json()
+      const data = await parseJSON(response) || {}
 
       if (response.ok) {
         alert(`Request ${action}d successfully!`)
@@ -141,6 +162,7 @@ export default function AdminPage() {
         alert(data.message || 'Failed to process request')
       }
     } catch (error) {
+      console.error(error)
       alert('Error processing request')
     }
   }
@@ -157,7 +179,7 @@ export default function AdminPage() {
         body: JSON.stringify({ action, remarks })
       })
 
-      const data = await response.json()
+      const data = await parseJSON(response) || {}
 
       if (response.ok) {
         alert(`Application ${action}d successfully!`)
@@ -166,6 +188,7 @@ export default function AdminPage() {
         alert(data.message || 'Failed to process application')
       }
     } catch (error) {
+      console.error(error)
       alert('Error processing application')
     }
   }
@@ -176,8 +199,8 @@ export default function AdminPage() {
       
       const schemeData = {
         ...schemeForm,
-        eligibility_criteria: JSON.parse(schemeForm.eligibility_criteria || '{}'),
-        documents_required: schemeForm.documents_required.split(',').map(d => d.trim())
+        eligibility_criteria: safeParseCriteria(schemeForm.eligibility_criteria),
+        documents_required: schemeForm.documents_required ? schemeForm.documents_required.split(',').map(d => d.trim()) : []
       }
 
       const response = await fetch(`${API}/api/admin/schemes`, {
@@ -189,16 +212,18 @@ export default function AdminPage() {
         body: JSON.stringify(schemeData)
       })
 
+      const data = await parseJSON(response) || {}
+
       if (response.ok) {
         alert('Scheme created successfully!')
         setIsSchemeDialogOpen(false)
         resetSchemeForm()
         fetchData()
       } else {
-        const data = await response.json()
         alert(data.message || 'Failed to create scheme')
       }
     } catch (error) {
+      console.error(error)
       alert('Error creating scheme')
     }
   }
@@ -211,8 +236,8 @@ export default function AdminPage() {
       
       const schemeData = {
         ...schemeForm,
-        eligibility_criteria: JSON.parse(schemeForm.eligibility_criteria || '{}'),
-        documents_required: schemeForm.documents_required.split(',').map(d => d.trim())
+        eligibility_criteria: safeParseCriteria(schemeForm.eligibility_criteria),
+        documents_required: schemeForm.documents_required ? schemeForm.documents_required.split(',').map(d => d.trim()) : []
       }
 
       const response = await fetch(`${API}/api/admin/schemes/${editingScheme.id}`, {
@@ -224,6 +249,8 @@ export default function AdminPage() {
         body: JSON.stringify(schemeData)
       })
 
+      const data = await parseJSON(response) || {}
+
       if (response.ok) {
         alert('Scheme updated successfully!')
         setIsSchemeDialogOpen(false)
@@ -231,10 +258,10 @@ export default function AdminPage() {
         resetSchemeForm()
         fetchData()
       } else {
-        const data = await response.json()
         alert(data.message || 'Failed to update scheme')
       }
     } catch (error) {
+      console.error(error)
       alert('Error updating scheme')
     }
   }
@@ -251,14 +278,16 @@ export default function AdminPage() {
         }
       })
 
+      const data = await parseJSON(response) || {}
+
       if (response.ok) {
         alert('Scheme deleted successfully!')
         fetchData()
       } else {
-        const data = await response.json()
         alert(data.message || 'Failed to delete scheme')
       }
     } catch (error) {
+      console.error(error)
       alert('Error deleting scheme')
     }
   }
@@ -271,8 +300,8 @@ export default function AdminPage() {
         description: scheme.description,
         category: scheme.category,
         benefits: scheme.benefits,
-        eligibility_criteria: JSON.stringify(scheme.eligibility_criteria, null, 2),
-        documents_required: scheme.documents_required.join(', ')
+        eligibility_criteria: JSON.stringify(scheme.eligibility_criteria || {}, null, 2),
+        documents_required: (scheme.documents_required || []).join(', ')
       })
     } else {
       setEditingScheme(null)
@@ -293,13 +322,17 @@ export default function AdminPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    try {
+      return new Date(dateString).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return dateString
+    }
   }
 
   const pendingRequests = editRequests.filter(r => r.status === 'pending')
@@ -452,9 +485,7 @@ export default function AdminPage() {
 
                       <div className="space-y-2 rounded-lg border p-4">
                         <h4 className="text-sm font-semibold text-muted-foreground">Requested Changes</h4>
-                        <p className="text-sm">
-                          {JSON.stringify(request.requested_changes, null, 2)}
-                        </p>
+                        <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(request.requested_changes, null, 2)}</pre>
                       </div>
                     </div>
 
