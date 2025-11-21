@@ -27,6 +27,8 @@ export default function SchemesPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [loading, setLoading] = useState(true)
 
+  const API = process.env.NEXT_PUBLIC_API_URL
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) {
@@ -43,7 +45,7 @@ export default function SchemesPage() {
 
   const fetchSchemes = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/schemes')
+      const response = await fetch(`${API}/api/schemes`)
       const data = await response.json()
       setSchemes(data)
       setFilteredSchemes(data)
@@ -57,14 +59,12 @@ export default function SchemesPage() {
   const filterSchemes = () => {
     let filtered = schemes
 
-    // Filter by category
     if (categoryFilter !== 'all') {
-      filtered = filtered.filter(scheme => 
+      filtered = filtered.filter(scheme =>
         scheme.category.toLowerCase() === categoryFilter.toLowerCase()
       )
     }
 
-    // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(scheme =>
         scheme.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -121,7 +121,7 @@ export default function SchemesPage() {
           </p>
         </div>
 
-        {/* Schemes Grid */}
+        {/* Scheme Cards */}
         {loading ? (
           <Card>
             <CardContent className="py-12 text-center">
@@ -150,12 +150,13 @@ export default function SchemesPage() {
                     {scheme.description}
                   </CardDescription>
                 </CardHeader>
+
                 <CardContent>
                   <div className="mb-4 rounded-lg bg-muted/50 p-3">
                     <p className="text-xs font-medium text-muted-foreground">Benefits:</p>
                     <p className="line-clamp-2 text-sm font-semibold">{scheme.benefits}</p>
                   </div>
-                  
+
                   <Link href={`/schemes/${scheme.id}`}>
                     <Button className="w-full" variant="outline">
                       View Details
