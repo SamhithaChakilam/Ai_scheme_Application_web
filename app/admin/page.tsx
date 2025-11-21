@@ -49,6 +49,8 @@ interface Scheme {
 
 export default function AdminPage() {
   const router = useRouter()
+  const API = process.env.NEXT_PUBLIC_API_URL
+
   const [editRequests, setEditRequests] = useState<EditRequest[]>([])
   const [applications, setApplications] = useState<Application[]>([])
   const [schemes, setSchemes] = useState<Scheme[]>([])
@@ -83,20 +85,22 @@ export default function AdminPage() {
     }
 
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   const fetchData = async () => {
     try {
+      setLoading(true)
       const token = localStorage.getItem('token')
 
       const [editResponse, appResponse, schemeResponse] = await Promise.all([
-        fetch('http://localhost:5000/api/admin/edit-requests', {
+        fetch(`${API}/api/admin/edit-requests`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:5000/api/admin/applications', {
+        fetch(`${API}/api/admin/applications`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:5000/api/admin/schemes', {
+        fetch(`${API}/api/admin/schemes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ])
@@ -105,9 +109,9 @@ export default function AdminPage() {
       const appData = await appResponse.json()
       const schemeData = await schemeResponse.json()
       
-      setEditRequests(editData)
-      setApplications(appData)
-      setSchemes(schemeData)
+      setEditRequests(editData || [])
+      setApplications(appData || [])
+      setSchemes(schemeData || [])
 
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -119,7 +123,7 @@ export default function AdminPage() {
   const handleEditRequest = async (requestId: string, action: 'approve' | 'reject') => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`http://localhost:5000/api/admin/edit-request/${requestId}`, {
+      const response = await fetch(`${API}/api/admin/edit-request/${requestId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +148,7 @@ export default function AdminPage() {
   const handleApplication = async (appId: string, action: 'approve' | 'reject', remarks: string = '') => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`http://localhost:5000/api/admin/applications/${appId}`, {
+      const response = await fetch(`${API}/api/admin/applications/${appId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +180,7 @@ export default function AdminPage() {
         documents_required: schemeForm.documents_required.split(',').map(d => d.trim())
       }
 
-      const response = await fetch('http://localhost:5000/api/admin/schemes', {
+      const response = await fetch(`${API}/api/admin/schemes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,7 +215,7 @@ export default function AdminPage() {
         documents_required: schemeForm.documents_required.split(',').map(d => d.trim())
       }
 
-      const response = await fetch(`http://localhost:5000/api/admin/schemes/${editingScheme.id}`, {
+      const response = await fetch(`${API}/api/admin/schemes/${editingScheme.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -240,7 +244,7 @@ export default function AdminPage() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`http://localhost:5000/api/admin/schemes/${schemeId}`, {
+      const response = await fetch(`${API}/api/admin/schemes/${schemeId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -363,7 +367,7 @@ export default function AdminPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{Object.keys(applications).length}</div>
+              <div className="text-2xl font-bold">{applications.length}</div>
               <p className="text-xs text-muted-foreground">
                 Applications filed
               </p>
