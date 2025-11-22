@@ -16,7 +16,6 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [digilockerStep, setDigilockerStep] = useState<'init' | 'consent' | 'complete'>('init')
   const [sessionId, setSessionId] = useState('')
-  const [activeTab, setActiveTab] = useState<'digilocker' | 'manual'>('digilocker')
 
   const [formData, setFormData] = useState({
     aadhaar: '',
@@ -176,8 +175,8 @@ export default function RegisterPage() {
             </CardHeader>
 
             <CardContent>
-              {/* Controlled Tabs: using activeTab state prevents mismatch */}
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'digilocker' | 'manual')}>
+              {/* Use uncontrolled Tabs with defaultValue to avoid controlled mismatches */}
+              <Tabs defaultValue="digilocker">
                 <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="digilocker">DigiLocker (Recommended)</TabsTrigger>
                   <TabsTrigger value="manual">Manual Registration</TabsTrigger>
