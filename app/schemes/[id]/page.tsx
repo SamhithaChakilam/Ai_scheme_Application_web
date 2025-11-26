@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, CheckCircle, FileText, AlertCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, FileText, AlertCircle, Upload } from 'lucide-react'
 import Link from 'next/link'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface Scheme {
   id?: string
@@ -28,42 +31,32 @@ export default function SchemeDetailPage() {
 
   const [scheme, setScheme] = useState<Scheme | null>(null)
   const [loading, setLoading] = useState(true)
-
   const [isEligible, setIsEligible] = useState(false)
   const [eligibilityChecked, setEligibilityChecked] = useState(false)
+
+  // Application dialog
+  const [showDialog, setShowDialog] = useState(false)
+
+  // Form fields
+  const [phone, setPhone] = useState('')
+  const [incomeCert, setIncomeCert] = useState<File | null>(null)
+  const [casteCert, setCasteCert] = useState<File | null>(null)
 
   useEffect(() => {
     fetchSchemeAndEligibility()
   }, [schemeId])
 
 
-  // ----------------------------------------------------------------
+  // --------------------------------------------------------------------------
   // FETCH SCHEME + CHECK ELIGIBILITY
-  // ----------------------------------------------------------------
+  // --------------------------------------------------------------------------
   const fetchSchemeAndEligibility = async () => {
     try {
-      // 1) Fetch scheme details normally
       const res = await fetch(`${API}/api/schemes/${schemeId}`)
       const data = await res.json()
+      setScheme(data)
 
-      if (res.ok && data.name) {
-        setScheme(data)
-      } else {
-        // fallback: search from all schemes
-        const allRes = await fetch(`${API}/api/schemes`)
-        const allSchemes = await allRes.json()
-
-        const found = allSchemes.find((s: any) =>
-          s.id === schemeId || s._id === schemeId
-        )
-
-        setScheme(found || null)
-      }
-
-      // 2) Eligibility check
       const token = localStorage.getItem("token")
-      if (!token) return router.push("/login")
-
       const eligRes = await fetch(`${API}/api/schemes/eligible`, {
         method: "POST",
         headers: {
@@ -71,11 +64,10 @@ export default function SchemeDetailPage() {
           "Authorization": `Bearer ${token}`
         }
       })
-
       const eligData = await eligRes.json()
 
-      const eligible = eligData.eligible_schemes?.some(
-        (s: any) => s.id === schemeId
+      const eligible = eligData.eligible_schemes?.some((s: any) =>
+        s.id === schemeId
       )
 
       setIsEligible(eligible)
@@ -88,12 +80,22 @@ export default function SchemeDetailPage() {
     }
   }
 
-  // ----------------------------------------------------------------
-  // APPLY HANDLER
-  // ----------------------------------------------------------------
-  const handleApply = async () => {
+
+  // --------------------------------------------------------------------------
+  // SUBMIT APPLICATION
+  // --------------------------------------------------------------------------
+  const submitApplication = async () => {
     const token = localStorage.getItem("token")
-    if (!token) return router.push("/login")
+    if (!token) return router.push('/login')
+
+    const applicationData: any = {
+      scheme_id: schemeId,
+      phone,
+      documents: {
+        income_certificate: incomeCert ? 'uploaded' : undefined,
+        caste_certificate: casteCert ? 'uploaded' : undefined,
+      }
+    }
 
     const res = await fetch(`${API}/api/applications`, {
       method: "POST",
@@ -101,13 +103,14 @@ export default function SchemeDetailPage() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({ scheme_id: schemeId })
+      body: JSON.stringify(applicationData)
     })
 
     const data = await res.json()
 
     if (res.ok) {
-      alert("Application submitted!")
+      alert("Application submitted successfully!")
+      setShowDialog(false)
       router.push("/applications")
     } else {
       alert(data.message)
@@ -115,9 +118,11 @@ export default function SchemeDetailPage() {
   }
 
 
-  // ----------------------------------------------------------------
-  // UI STATES
-  // ----------------------------------------------------------------
+
+
+  // --------------------------------------------------------------------------
+  // UI
+  // --------------------------------------------------------------------------
   if (loading || !scheme) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -146,6 +151,7 @@ export default function SchemeDetailPage() {
 
           <CardContent className="space-y-6">
 
+            {/* Benefits */}
             <div>
               <h3 className="mb-2 font-semibold">Benefits</h3>
               <div className="rounded-lg bg-primary/5 p-4">
@@ -153,6 +159,7 @@ export default function SchemeDetailPage() {
               </div>
             </div>
 
+            {/* Eligibility */}
             <div>
               <h3 className="mb-3 font-semibold">Eligibility Criteria</h3>
               <pre className="text-sm bg-muted p-3 rounded">
@@ -160,6 +167,7 @@ export default function SchemeDetailPage() {
               </pre>
             </div>
 
+            {/* Required Docs */}
             <div>
               <h3 className="mb-3 font-semibold">Required Documents</h3>
               <ul className="space-y-2">
@@ -172,10 +180,7 @@ export default function SchemeDetailPage() {
               </ul>
             </div>
 
-            {/* ----------------------------------------------------- */}
-            {/* ELIGIBILITY RESULT + APPLY BUTTON  */}
-            {/* ----------------------------------------------------- */}
-
+            {/* Eligibility Result */}
             <div className="rounded-lg border p-4 mt-6">
               {!eligibilityChecked ? (
                 <p className="text-sm text-muted-foreground">Checking eligibility...</p>
@@ -185,7 +190,8 @@ export default function SchemeDetailPage() {
                     <CheckCircle className="h-5 w-5" />
                     You are eligible for this scheme
                   </p>
-                  <Button className="w-full" onClick={handleApply}>
+
+                  <Button className="w-full" onClick={() => setShowDialog(true)}>
                     Apply Now
                   </Button>
                 </div>
@@ -199,8 +205,46 @@ export default function SchemeDetailPage() {
 
           </CardContent>
         </Card>
-
       </div>
+
+
+      {/* ---------------------------------------------------------------- */}
+      {/* APPLICATION FORM DIALOG */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply for {scheme.name}</DialogTitle>
+            <DialogDescription>Fill the required details</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+
+            {/* Phone Number */}
+            <div>
+              <Label>Phone Number</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Enter your phone" />
+            </div>
+
+            {/* Income Cert */}
+            <div>
+              <Label>Income Certificate</Label>
+              <Input type="file" onChange={(e) => setIncomeCert(e.target.files?.[0] || null)} />
+            </div>
+
+            {/* Caste Cert */}
+            <div>
+              <Label>Caste Certificate</Label>
+              <Input type="file" onChange={(e) => setCasteCert(e.target.files?.[0] || null)} />
+            </div>
+
+            <Button className="w-full" onClick={submitApplication}>
+              Submit Application
+            </Button>
+
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
