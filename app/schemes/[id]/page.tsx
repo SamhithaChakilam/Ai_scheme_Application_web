@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, CheckCircle, FileText, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface Scheme {
   id?: string
@@ -30,43 +29,95 @@ export default function SchemeDetailPage() {
   const [scheme, setScheme] = useState<Scheme | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const [isEligible, setIsEligible] = useState(false)
+  const [eligibilityChecked, setEligibilityChecked] = useState(false)
+
   useEffect(() => {
-    fetchScheme()
+    fetchSchemeAndEligibility()
   }, [schemeId])
 
-  const fetchScheme = async () => {
+
+  // ----------------------------------------------------------------
+  // FETCH SCHEME + CHECK ELIGIBILITY
+  // ----------------------------------------------------------------
+  const fetchSchemeAndEligibility = async () => {
     try {
-      // Try normal scheme fetch
+      // 1) Fetch scheme details normally
       const res = await fetch(`${API}/api/schemes/${schemeId}`)
       const data = await res.json()
 
-      // If scheme exists → good
       if (res.ok && data.name) {
         setScheme(data)
-        setLoading(false)
-        return
+      } else {
+        // fallback: search from all schemes
+        const allRes = await fetch(`${API}/api/schemes`)
+        const allSchemes = await allRes.json()
+
+        const found = allSchemes.find((s: any) =>
+          s.id === schemeId || s._id === schemeId
+        )
+
+        setScheme(found || null)
       }
 
-      // FALLBACK: fetch all schemes and search by id OR _id
-      const allRes = await fetch(`${API}/api/schemes`)
-      const allSchemes = await allRes.json()
+      // 2) Eligibility check
+      const token = localStorage.getItem("token")
+      if (!token) return router.push("/login")
 
-      const found = allSchemes.find((s: any) =>
-        s.id === schemeId || s._id === schemeId
+      const eligRes = await fetch(`${API}/api/schemes/eligible`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      })
+
+      const eligData = await eligRes.json()
+
+      const eligible = eligData.eligible_schemes?.some(
+        (s: any) => s.id === schemeId
       )
 
-      if (found) {
-        setScheme(found)
-      } else {
-        alert("Scheme not found")
-      }
-    } catch (error) {
-      console.error(error)
+      setIsEligible(eligible)
+      setEligibilityChecked(true)
+
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
+  // ----------------------------------------------------------------
+  // APPLY HANDLER
+  // ----------------------------------------------------------------
+  const handleApply = async () => {
+    const token = localStorage.getItem("token")
+    if (!token) return router.push("/login")
+
+    const res = await fetch(`${API}/api/applications`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ scheme_id: schemeId })
+    })
+
+    const data = await res.json()
+
+    if (res.ok) {
+      alert("Application submitted!")
+      router.push("/applications")
+    } else {
+      alert(data.message)
+    }
+  }
+
+
+  // ----------------------------------------------------------------
+  // UI STATES
+  // ----------------------------------------------------------------
   if (loading || !scheme) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -94,6 +145,7 @@ export default function SchemeDetailPage() {
           </CardHeader>
 
           <CardContent className="space-y-6">
+
             <div>
               <h3 className="mb-2 font-semibold">Benefits</h3>
               <div className="rounded-lg bg-primary/5 p-4">
@@ -119,6 +171,32 @@ export default function SchemeDetailPage() {
                 ))}
               </ul>
             </div>
+
+            {/* ----------------------------------------------------- */}
+            {/* ELIGIBILITY RESULT + APPLY BUTTON  */}
+            {/* ----------------------------------------------------- */}
+
+            <div className="rounded-lg border p-4 mt-6">
+              {!eligibilityChecked ? (
+                <p className="text-sm text-muted-foreground">Checking eligibility...</p>
+              ) : isEligible ? (
+                <div className="space-y-3">
+                  <p className="flex items-center gap-2 text-green-600 font-medium">
+                    <CheckCircle className="h-5 w-5" />
+                    You are eligible for this scheme
+                  </p>
+                  <Button className="w-full" onClick={handleApply}>
+                    Apply Now
+                  </Button>
+                </div>
+              ) : (
+                <p className="flex items-center gap-2 text-red-600 font-medium">
+                  <AlertCircle className="h-5 w-5" />
+                  You are not eligible for this scheme
+                </p>
+              )}
+            </div>
+
           </CardContent>
         </Card>
 
