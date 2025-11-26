@@ -9,10 +9,9 @@ import { useRouter } from 'next/navigation'
 import { Users, FileText, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, BookOpen } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
-// ------------------ Interfaces ------------------
+// Types
 interface EditRequest {
   id: string
   aadhaar: string
@@ -26,7 +25,7 @@ interface Application {
   id: string
   aadhaar: string
   scheme_id: string
-  status: 'submitted' | 'approved' | 'rejected'
+  status: string
   submitted_at: string
 }
 
@@ -35,17 +34,15 @@ interface Scheme {
   name: string
   description: string
   category: string
-  benefits: string
+  benefits: number
   eligibility_criteria: any
   documents_required: string[]
 }
 
-// --------------------------------------------------
-
 export default function AdminPage() {
   const router = useRouter()
 
-  // FIXED API URL — Create Scheme will now work
+  // FIXED: Always fallback to backend URL
   const API =
     process.env.NEXT_PUBLIC_API_URL ||
     'https://ai-scheme-application-web.onrender.com'
@@ -68,17 +65,29 @@ export default function AdminPage() {
     documents_required: ''
   })
 
-  // -----------------------------------------------
-  // Safe JSON parser (avoids crash)
-  const safeJSON = (text: string) => {
+  // Safe JSON parser
+  const safeJSON = (t: string) => {
     try {
-      return JSON.parse(text || '{}')
+      return JSON.parse(t || '{}')
     } catch {
       return {}
     }
   }
-  // -----------------------------------------------
 
+  // Convert JSON number strings → numbers
+  const convertNumbers = (obj: any) => {
+    const result: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'string' && !isNaN(Number(value))) {
+        result[key] = Number(value)
+      } else {
+        result[key] = value
+      }
+    }
+    return result
+  }
+
+  // Authenticated fetch wrapper
   const authFetch = async (path: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('token')
 
@@ -92,21 +101,17 @@ export default function AdminPage() {
     })
   }
 
-  // ------------------ Load admin data ------------------
+  // Load admin data
   useEffect(() => {
     const token = localStorage.getItem('token')
     const userData = localStorage.getItem('user')
 
-    if (!token || !userData) {
-      router.push('/admin/login')
-      return
-    }
+    if (!token || !userData) return router.push('/admin/login')
 
     const user = JSON.parse(userData)
     if (user.role !== 'admin') {
       alert('Admin access required')
-      router.push('/admin/login')
-      return
+      return router.push('/admin/login')
     }
 
     fetchData()
@@ -116,19 +121,15 @@ export default function AdminPage() {
     try {
       setLoading(true)
 
-      const [editRes, appRes, schemeRes] = await Promise.all([
+      const [e, a, s] = await Promise.all([
         authFetch('/api/admin/edit-requests'),
         authFetch('/api/admin/applications'),
         authFetch('/api/admin/schemes')
       ])
 
-      const editData = await editRes.json()
-      const appData = await appRes.json()
-      const schemeData = await schemeRes.json()
-
-      setEditRequests(Array.isArray(editData) ? editData : [])
-      setApplications(Array.isArray(appData) ? appData : [])
-      setSchemes(Array.isArray(schemeData) ? schemeData : [])
+      setEditRequests(await e.json())
+      setApplications(await a.json())
+      setSchemes(await s.json())
     } catch (err) {
       console.error(err)
     } finally {
@@ -136,94 +137,65 @@ export default function AdminPage() {
     }
   }
 
-  // ------------------ ACTION: Approve/Reject Edit ------------------
+  // Approve / Reject edit request
   const handleEditRequest = async (id: string, action: 'approve' | 'reject') => {
-    const res = await authFetch(`/api/admin/edit-request/${id}`, {
+    const r = await authFetch(`/api/admin/edit-request/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ action })
     })
-
-    const data = await res.json()
-    if (res.ok) {
-      alert(`Request ${action}d successfully`)
-      fetchData()
-    } else {
-      alert(data.message || 'Failed to process request')
-    }
+    r.ok ? fetchData() : alert('Failed to process')
   }
 
-  // ------------------ ACTION: Approve/Reject Application ------------------
+  // Approve / Reject application
   const handleApplication = async (
     id: string,
     action: 'approve' | 'reject',
     remarks = ''
   ) => {
-    const res = await authFetch(`/api/admin/applications/${id}`, {
+    const r = await authFetch(`/api/admin/applications/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ action, remarks })
     })
-
-    const data = await res.json()
-    if (res.ok) {
-      alert(`Application ${action}d`)
-      fetchData()
-    } else {
-      alert(data.message || 'Failed to update application')
-    }
+    r.ok ? fetchData() : alert('Failed to process')
   }
 
-  // ------------------ SCHEME: Create or Update ------------------
+  // Create or Update Scheme
   const submitScheme = async () => {
+    const eligibilityObj = convertNumbers(safeJSON(schemeForm.eligibility_criteria))
+
     const payload = {
       name: schemeForm.name,
       description: schemeForm.description,
       category: schemeForm.category,
-      benefits: schemeForm.benefits,
-      eligibility_criteria: safeJSON(schemeForm.eligibility_criteria),
+      benefits: Number(schemeForm.benefits),
+      eligibility_criteria: eligibilityObj,
       documents_required: schemeForm.documents_required
         .split(',')
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
+        .map(x => x.trim())
+        .filter(Boolean)
     }
 
-    const path = editingScheme
+    const route = editingScheme
       ? `/api/admin/schemes/${editingScheme.id}`
       : '/api/admin/schemes'
 
     const method = editingScheme ? 'PUT' : 'POST'
 
-    const res = await authFetch(path, {
-      method,
-      body: JSON.stringify(payload)
-    })
+    const r = await authFetch(route, { method, body: JSON.stringify(payload) })
+    const data = await r.json()
 
-    const data = await res.json()
-
-    if (res.ok) {
-      alert(editingScheme ? 'Scheme updated' : 'Scheme created successfully')
+    if (r.ok) {
+      alert(editingScheme ? 'Updated!' : 'Created!')
       setIsSchemeDialogOpen(false)
       setEditingScheme(null)
       resetForm()
       fetchData()
     } else {
-      alert(data.message || 'Failed to save scheme')
+      alert(data.message || 'Failed to create scheme')
     }
   }
 
-  const openEditScheme = (scheme: Scheme) => {
-    setEditingScheme(scheme)
-    setSchemeForm({
-      name: scheme.name,
-      description: scheme.description,
-      category: scheme.category,
-      benefits: scheme.benefits,
-      eligibility_criteria: JSON.stringify(scheme.eligibility_criteria, null, 2),
-      documents_required: scheme.documents_required.join(', ')
-    })
-    setIsSchemeDialogOpen(true)
-  }
-
-  const resetForm = () => {
+  const resetForm = () =>
     setSchemeForm({
       name: '',
       description: '',
@@ -232,53 +204,45 @@ export default function AdminPage() {
       eligibility_criteria: '',
       documents_required: ''
     })
+
+  const openEdit = (scheme: Scheme) => {
+    setEditingScheme(scheme)
+    setSchemeForm({
+      name: scheme.name,
+      description: scheme.description,
+      category: scheme.category,
+      benefits: String(scheme.benefits),
+      eligibility_criteria: JSON.stringify(
+        scheme.eligibility_criteria,
+        null,
+        2
+      ),
+      documents_required: scheme.documents_required.join(', ')
+    })
+    setIsSchemeDialogOpen(true)
   }
 
   const deleteScheme = async (id: string) => {
-    if (!confirm('Delete this scheme permanently?')) return
-
-    const res = await authFetch(`/api/admin/schemes/${id}`, {
-      method: 'DELETE'
-    })
-
-    const data = await res.json()
-
-    if (res.ok) {
-      alert('Scheme deleted')
-      fetchData()
-    } else {
-      alert(data.message || 'Delete failed')
-    }
+    if (!confirm('Delete scheme permanently?')) return
+    const r = await authFetch(`/api/admin/schemes/${id}`, { method: 'DELETE' })
+    r.ok ? fetchData() : alert('Delete failed')
   }
 
-  const formatDate = (date: string) =>
-    new Date(date).toLocaleString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-
   const pendingRequests = editRequests.filter(r => r.status === 'pending')
-  const pendingApplications = applications.filter(a => a.status === 'submitted')
-  const processedApplications = applications.filter(a => a.status !== 'submitted')
-
-  // ------------------ UI Rendering ------------------
+  const pendingApps = applications.filter(a => a.status === 'submitted')
+  const processedApps = applications.filter(a => a.status !== 'submitted')
 
   return (
     <div className="min-h-screen bg-background p-8">
       <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
-      <p className="text-muted-foreground mb-8">
-        Manage schemes, applications, and edit requests
-      </p>
+      <p className="text-muted-foreground mb-8">Manage everything easily</p>
 
-      {/* STAT CARDS */}
+      {/* Stats */}
       <div className="grid md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardHeader className="flex justify-between">
             <CardTitle>Pending Requests</CardTitle>
-            <Clock className="w-4 h-4" />
+            <Clock />
           </CardHeader>
           <CardContent className="text-2xl">{pendingRequests.length}</CardContent>
         </Card>
@@ -286,17 +250,15 @@ export default function AdminPage() {
         <Card>
           <CardHeader className="flex justify-between">
             <CardTitle>Pending Applications</CardTitle>
-            <FileText className="w-4 h-4" />
+            <FileText />
           </CardHeader>
-          <CardContent className="text-2xl">
-            {pendingApplications.length}
-          </CardContent>
+          <CardContent className="text-2xl">{pendingApps.length}</CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex justify-between">
             <CardTitle>Total Schemes</CardTitle>
-            <BookOpen className="w-4 h-4" />
+            <BookOpen />
           </CardHeader>
           <CardContent className="text-2xl">{schemes.length}</CardContent>
         </Card>
@@ -304,13 +266,13 @@ export default function AdminPage() {
         <Card>
           <CardHeader className="flex justify-between">
             <CardTitle>Total Users</CardTitle>
-            <Users className="w-4 h-4" />
+            <Users />
           </CardHeader>
           <CardContent className="text-2xl">{applications.length}</CardContent>
         </Card>
       </div>
 
-      {/* TABS */}
+      {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList>
           <TabsTrigger value="edit-requests">Profile Edits</TabsTrigger>
@@ -318,13 +280,11 @@ export default function AdminPage() {
           <TabsTrigger value="schemes">Schemes</TabsTrigger>
         </TabsList>
 
-        {/* ---------------- EDIT REQUESTS ---------------- */}
+        {/* Edit Requests */}
         <TabsContent value="edit-requests" className="mt-6 space-y-4">
           {pendingRequests.length === 0 ? (
             <Card>
-              <CardContent className="py-8 text-center">
-                No pending requests
-              </CardContent>
+              <CardContent className="p-6 text-center">No pending requests</CardContent>
             </Card>
           ) : (
             pendingRequests.map(req => (
@@ -338,7 +298,7 @@ export default function AdminPage() {
                     {JSON.stringify(req.requested_changes, null, 2)}
                   </pre>
 
-                  <div className="mt-4 flex gap-2">
+                  <div className="flex gap-2 mt-4">
                     <Button
                       className="bg-success"
                       onClick={() => handleEditRequest(req.id, 'approve')}
@@ -358,23 +318,22 @@ export default function AdminPage() {
           )}
         </TabsContent>
 
-        {/* ---------------- APPLICATIONS ---------------- */}
+        {/* Applications */}
         <TabsContent value="applications" className="mt-6 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Pending Applications</CardTitle>
             </CardHeader>
             <CardContent>
-              {pendingApplications.length === 0 ? (
+              {pendingApps.length === 0 ? (
                 <div>No pending applications</div>
               ) : (
-                pendingApplications.map(app => (
-                  <Card key={app.id} className="mb-3">
-                    <CardContent className="pt-4">
+                pendingApps.map(app => (
+                  <Card key={app.id} className="mt-3">
+                    <CardContent className="pt-6">
                       <p>ID: {app.id}</p>
                       <p>Aadhaar: {app.aadhaar}</p>
                       <p>Scheme: {app.scheme_id}</p>
-                      <p>Submitted: {formatDate(app.submitted_at)}</p>
 
                       <div className="flex gap-2 mt-4">
                         <Button
@@ -400,59 +359,89 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* ---------------- SCHEMES ---------------- */}
+        {/* Schemes */}
         <TabsContent value="schemes" className="mt-6 space-y-4">
           <Card>
             <CardHeader className="flex justify-between">
               <CardTitle>Manage Schemes</CardTitle>
-              <Dialog
-                open={isSchemeDialogOpen}
-                onOpenChange={setIsSchemeDialogOpen}
-              >
+
+              {/* Add/Edit Scheme Modal */}
+              <Dialog open={isSchemeDialogOpen} onOpenChange={setIsSchemeDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={() => { resetForm(); setEditingScheme(null); }}>
-                    <Plus className="mr-2" /> Add Scheme
+                  <Button
+                    onClick={() => {
+                      resetForm()
+                      setEditingScheme(null)
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Scheme
                   </Button>
                 </DialogTrigger>
 
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle>{editingScheme ? 'Edit Scheme' : 'Create Scheme'}</DialogTitle>
+                    <DialogTitle>
+                      {editingScheme ? 'Edit Scheme' : 'Create Scheme'}
+                    </DialogTitle>
                   </DialogHeader>
 
-                  {/* Form */}
                   <div className="space-y-3">
                     <Input
-                      placeholder="Name"
+                      placeholder="Scheme Name"
                       value={schemeForm.name}
-                      onChange={e => setSchemeForm({ ...schemeForm, name: e.target.value })}
+                      onChange={e =>
+                        setSchemeForm({ ...schemeForm, name: e.target.value })
+                      }
                     />
+
                     <Textarea
                       placeholder="Description"
                       value={schemeForm.description}
-                      onChange={e => setSchemeForm({ ...schemeForm, description: e.target.value })}
+                      onChange={e =>
+                        setSchemeForm({
+                          ...schemeForm,
+                          description: e.target.value
+                        })
+                      }
                     />
+
                     <Input
                       placeholder="Category"
                       value={schemeForm.category}
-                      onChange={e => setSchemeForm({ ...schemeForm, category: e.target.value })}
+                      onChange={e =>
+                        setSchemeForm({ ...schemeForm, category: e.target.value })
+                      }
                     />
-                    <Textarea
-                      placeholder="Benefits"
+
+                    <Input
+                      placeholder="Benefits (number)"
                       value={schemeForm.benefits}
-                      onChange={e => setSchemeForm({ ...schemeForm, benefits: e.target.value })}
+                      onChange={e =>
+                        setSchemeForm({ ...schemeForm, benefits: e.target.value })
+                      }
                     />
+
                     <Textarea
-                      placeholder='Eligibility Criteria (JSON)'
-                      value={schemeForm.eligibility_criteria}
-                      onChange={e => setSchemeForm({ ...schemeForm, eligibility_criteria: e.target.value })}
+                      placeholder='Eligibility Criteria (JSON)\nExample: {"min_age": 18, "max_income": 200000}'
                       className="font-mono text-sm"
+                      value={schemeForm.eligibility_criteria}
+                      onChange={e =>
+                        setSchemeForm({
+                          ...schemeForm,
+                          eligibility_criteria: e.target.value
+                        })
+                      }
                     />
+
                     <Input
                       placeholder="Documents (comma separated)"
                       value={schemeForm.documents_required}
                       onChange={e =>
-                        setSchemeForm({ ...schemeForm, documents_required: e.target.value })
+                        setSchemeForm({
+                          ...schemeForm,
+                          documents_required: e.target.value
+                        })
                       }
                     />
 
@@ -465,26 +454,25 @@ export default function AdminPage() {
             </CardHeader>
 
             <CardContent>
-              {schemes.map(scheme => (
-                <Card key={scheme.id} className="mt-3">
+              {schemes.map(s => (
+                <Card key={s.id} className="mb-3">
                   <CardContent className="pt-6 flex justify-between">
                     <div>
-                      <h3 className="font-semibold">{scheme.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {scheme.description}
-                      </p>
-                      <Badge className="mt-2">{scheme.category}</Badge>
+                      <h3 className="font-semibold">{s.name}</h3>
+                      <p className="text-muted-foreground">{s.description}</p>
+                      <Badge className="mt-2">{s.category}</Badge>
                     </div>
 
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => openEditScheme(scheme)}>
-                        <Edit className="w-4 h-4" />
+                      <Button variant="outline" onClick={() => openEdit(s)}>
+                        <Edit className="h-4 w-4" />
                       </Button>
+
                       <Button
                         variant="destructive"
-                        onClick={() => deleteScheme(scheme.id)}
+                        onClick={() => deleteScheme(s.id)}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </CardContent>
